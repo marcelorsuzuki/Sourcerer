@@ -166,7 +166,7 @@ class SliceImpl implements Slice {
             builder.append(contents, imp.getOffset(), imp.getLength()).append('\n');
           }
         }
-        
+
         builder.append('\n');
         
         Deque<Integer> endDeclared = new LinkedList<>();
@@ -177,7 +177,7 @@ class SliceImpl implements Slice {
             builder.append("}\n");
             endDeclared.pop();
           }
-          if (entity.getEntityType().isDeclaredType()) {
+          if (entity.getEntityType().is(Entity.INTERFACE, Entity.ENUM, Entity.ANNOTATION)) {
             // Add the modifiers
             for (Modifier mod : entity.getModifiers()) {
               builder.append(mod).append(' ');
