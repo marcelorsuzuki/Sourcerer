@@ -56,7 +56,8 @@ public class CodeGenieIndexBuilder extends AbstractIndexBuilder {
       QualifiedColumn<String> methodParamsSel = EntitiesTable.PARAMS.qualify(e1);
       QualifiedColumn<String> methodReturnFQNsel = EntitiesTable.FQN.qualify(e2);
       selectMethods.addSelect(methodIDsel, methodFQNsel, methodParamsSel, methodReturnFQNsel);
-      selectMethods.andWhere(ProjectsTable.PROJECT_TYPE.compareEquals(Project.CRAWLED), EntitiesTable.ENTITY_TYPE.qualify(e1).compareEquals(Entity.METHOD), RelationsTable.RELATION_TYPE.compareEquals(Relation.RETURNS));
+      selectMethods.andWhere(EntitiesTable.ENTITY_TYPE.qualify(e1).compareEquals(Entity.METHOD), RelationsTable.RELATION_TYPE.compareEquals(Relation.RETURNS));
+//      selectMethods.andWhere(ProjectsTable.PROJECT_TYPE.compareEquals(Project.CRAWLED), EntitiesTable.ENTITY_TYPE.qualify(e1).compareEquals(Entity.METHOD), RelationsTable.RELATION_TYPE.compareEquals(Relation.RETURNS));
 //      selectMethods.setLimit(100);
       
       TypedQueryResult result = selectMethods.selectStreamed();
