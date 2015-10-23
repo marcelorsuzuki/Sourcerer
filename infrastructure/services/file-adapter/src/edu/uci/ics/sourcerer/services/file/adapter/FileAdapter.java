@@ -541,6 +541,7 @@ public class FileAdapter {
     }
     
     public byte[] getResult() {
+      System.out.println("fileid: " + this.fileID + "; offset: " + offset + "; length: " + length);
       if (offset == -1) {
         return fullResult;
       } else if (result == null) {
