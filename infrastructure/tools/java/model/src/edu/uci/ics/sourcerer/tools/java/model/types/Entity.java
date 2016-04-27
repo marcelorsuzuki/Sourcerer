@@ -53,9 +53,9 @@ public enum Entity {
       }
       return false;
     }
-//    public boolean isDeclaredType() {
-//      return this == CLASS || this == INTERFACE || this == ENUM || this == ANNOTATION;
-//    }
+    public boolean isDeclaredType() {
+      return this == CLASS || this == INTERFACE || this == ENUM || this == ANNOTATION ;//|| this == FIELD;
+    }
 //    
 //    public boolean isInternalMeaningful() {
 //      return !(this == PACKAGE || this == ARRAY || this == TYPE_VARIABLE || this == WILDCARD || this == PARAMETERIZED_TYPE || this == UNKNOWN);
@@ -162,4 +162,9 @@ public enum Entity {
     public String toString() {
       return name().toLowerCase();
     }
+    
+	public boolean isField() {
+		return this==FIELD;
+	}
+
   }
