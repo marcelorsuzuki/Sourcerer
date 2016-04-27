@@ -19,6 +19,7 @@ package edu.uci.ics.sourcerer.services.slicer.internal;
 
 import static edu.uci.ics.sourcerer.util.io.logging.Logging.logger;
 
+import java.lang.reflect.Modifier;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.Set;
@@ -33,6 +34,8 @@ import edu.uci.ics.sourcerer.tools.java.model.types.Relation;
  */
 public abstract class AbstractSlicerImpl implements Slicer {
   
+	public static final boolean lookRecursion = false;
+	
   AbstractSlicerImpl() {}
   
   protected abstract SlicerDatabaseAccessor getAccessor();
@@ -53,26 +56,45 @@ public abstract class AbstractSlicerImpl implements Slicer {
       queue = new NovelQueue(seeds);
     }
     
+    
+    public boolean isJREEntity(SlicedEntityImpl e){
+    	String className = e.getFqn();
+    	className=className.substring(0, className.lastIndexOf('.'));
+    	try {
+			Class.forName(className);
+			return true;
+		} catch (ClassNotFoundException e1) {
+			FelipeDebug.debug(e1.getMessage());
+			return false;
+		}    	
+    }
     public Slice slice() {
 //      slice.addBasicLibraryTypes(db);
       while (queue.hasMore()) {
         while (queue.hasMore()) {
           SlicedEntityImpl entity = queue.poll();
-          
           switch (entity.getEntityType()) {
             case FIELD:
             case ENUM_CONSTANT:
             case INITIALIZER:
             case METHOD:
-              addContainingEntity(entity.getEntityID());
-              addUsedTypes(entity.getEntityID());
-              addCalledMethods(entity.getEntityID());
+            case CONSTRUCTOR:
+              boolean willLookRecursion = !isJREEntity(entity) || lookRecursion;
+              FelipeDebug.debug("["+entity.getEntityType()+"]:"+entity.getFqn()+ " ("+entity.getEntityID()+")[willAdd="+willLookRecursion+"]");
+        	  addContainingEntity(entity.getEntityID());
+        	  addUsedTypes(entity.getEntityID());
+        	  //addInstanciedTypes(entity.getEntityID());
+              if(willLookRecursion){
+            	  addCalledMethods(entity.getEntityID());
+            	  addWrittedEntities(entity.getEntityID());
+            	  addReadEntities(entity.getEntityID());
+              }
               break;
             case CLASS:
             case INTERFACE:
             case ENUM:
               addContainingEntity(entity.getEntityID());
-//              addUsedTypes(entity.getEntityID());
+              //addUsedTypes(entity.getEntityID());
               addCalledMethods(entity.getEntityID());
               if (slice.isInternal(entity.getEntityID())) {
                 addInitializers(entity.getEntityID());
@@ -114,14 +136,26 @@ public abstract class AbstractSlicerImpl implements Slicer {
       return slice;
     }
     
-    private void addContainingEntity(Integer entityID) {
+    private void addInstanciedTypes(Integer entityID) {
+    	queue.addAll(db.getRelationTargetsBySource(Relation.INSTANTIATES, entityID));
+	}
+
+	private void addReadEntities(Integer entityID) {
+		queue.addAll(db.getRelationTargetsBySource(Relation.READS, entityID));
+	}
+
+	private void addWrittedEntities(Integer entityID) {
+    	queue.addAll(db.getRelationTargetsBySource(Relation.WRITES, entityID));
+		
+	}
+
+	private void addContainingEntity(Integer entityID) {
       queue.addAll(db.getRelationSourcesByTarget(Relation.CONTAINS, entityID));
     }
     
     private void addUsedTypes(Integer entityID) {
       queue.addAll(db.getRelationTargetsBySource(Relation.USES, entityID));
     }
-    
     private void addCalledMethods(Integer entityID) {
       queue.addAll(db.getRelationTargetsBySource(Relation.CALLS, entityID));
     }
@@ -208,14 +242,15 @@ public abstract class AbstractSlicerImpl implements Slicer {
         queue = new LinkedList<>();
         
         LinkedList<Integer> todo = new LinkedList<>(seeds);
-        while (!todo.isEmpty()) {
-          Integer entityID = todo.poll();
-          SlicedEntityImpl entity = db.getEntity(entityID);
-          if (entity.getEntityType() != Entity.PARAMETER && entity.getEntityType() != Entity.LOCAL_VARIABLE) {
-            slice.addProject(entity.getProjectID());
-            queue.add(entity);
-            slice.add(entity);
+        while (!todo.isEmpty()) {	//check for dependencies, like call to other methods, ...
+          Integer entityID = todo.poll();	//get next required entity id to work on it
+          SlicedEntityImpl entity = db.getEntity(entityID); //get the entity itself
+          if (entity.getEntityType() != Entity.PARAMETER && entity.getEntityType() != Entity.LOCAL_VARIABLE) {//if it is not a parameter or local variable
+            slice.addProject(entity.getProjectID());//add its project
+            queue.add(entity);						//add to the queue
+            slice.add(entity);						//add slice
             todo.addAll(db.getRelationTargetsBySource(Relation.CONTAINS, entityID));
+            todo.addAll(db.getRelationTargetsBySource(Relation.WRITES, entityID));//added by Felipe flp313@gmail.com
           }
         }
       }
@@ -231,10 +266,11 @@ public abstract class AbstractSlicerImpl implements Slicer {
           SlicedEntityImpl entity = db.getEntity(entityID);
           queue.add(entity);
           slice.add(entity);
+          
         }
       }
-      
-      public void addAllEntities(Iterable<? extends SlicedEntityImpl> entities) {
+
+	public void addAllEntities(Iterable<? extends SlicedEntityImpl> entities) {
         for (SlicedEntityImpl entityID : entities) {
           add(entityID);
         }

@@ -21,11 +21,13 @@ import static edu.uci.ics.sourcerer.util.io.logging.Logging.logger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
@@ -65,27 +67,30 @@ public class SliceImpl implements Slice {
 	void add(SlicedEntityImpl entity) {
 		if (projects.contains(entity.getProjectID())) {
 			internalEntities.put(entity.getEntityID(), entity);
-			if (isSliceable(entity.getEntityType())) {
+			if (isSliceable(entity.getEntityType()) ){
 				SlicedFileImpl file = files.get(entity.getFileID());
 				if (file == null) {
 					file = new SlicedFileImpl(entity.getFileID());
 					files.put(entity.getFileID(), file);
 				}
 				file.addEntity(entity);
-			}
+			} 
 		} else {
 			externalEntities.put(entity.getEntityID(), entity);
 		}
 	}
 
 	private static boolean isSliceable(Entity type) {
-		return type == Entity.CLASS || 
-			   type == Entity.INTERFACE || 
-			   type == Entity.ENUM || 
-			   type == Entity.FIELD || 
-			   type == Entity.ENUM_CONSTANT || 
-			   type == Entity.INITIALIZER ||				
-			   type == Entity.METHOD;
+		return 
+				type == Entity.CLASS || 
+				type == Entity.INTERFACE ||
+				type == Entity.ENUM ||
+				type == Entity.FIELD ||
+				type == Entity.ENUM_CONSTANT ||
+				type == Entity.INITIALIZER ||
+				type == Entity.METHOD || 
+				//false;
+				type == Entity.CONSTRUCTOR;
 	}
 
 	ModeledTypeImpl getType(Integer entityID) {
@@ -131,7 +136,7 @@ public class SliceImpl implements Slice {
 
 	private byte[] getContents(Integer fileID) {
 		if (SlicerFactory.FILE_SERVER_URL.hasValue()) {
-			return IOUtils.wget(SlicerFactory.FILE_SERVER_URL.getValue() + "?fileID=" + fileID);
+			return IOUtils.wget(SlicerFactory.FILE_SERVER_URL.getValue() + "?fileID=" + fileID); 
 		} else if (JavaRepositoryFactory.INPUT_REPO.hasValue()) {
 			return FileAdapter.lookupByFileID(fileID);
 		} else {
@@ -145,9 +150,13 @@ public class SliceImpl implements Slice {
 		try (ZipOutputStream zos = new ZipOutputStream(bos)) {
 			// For each file
 			for (SlicedFileImpl file : files.values()) {
-
+				FelipeDebug.debug("[File]:"+file.getFileID());
+				for (SlicedEntityImpl e : file.getEntities()){
+					FelipeDebug.debug("[Entity]"+e.getEntityType().name()+":" + e.getFqn());
+				}
 				// The first entry should always be a declared type
 				String fqn = file.getEntities().iterator().next().getFqn();
+				FelipeDebug.debug("[File]:"+fqn);
 
 				// Get the file contents
 				char[] contents = new String(getContents(file.getFileID())).toCharArray();
@@ -170,30 +179,66 @@ public class SliceImpl implements Slice {
 
 				Deque<Integer> endDeclared = new LinkedList<>();
 
-				for (SlicedEntityImpl entity : file.getEntities()) {
+				for (SlicedEntityImpl entity: file.getEntities()) {
 					// Is the start of this after the last declared?
+					//TODO test cases for this "if" ADDED BY FELIPE 
+					if(entity.getOffset()==null){
+						continue;
+					}
 					if (!endDeclared.isEmpty() && entity.getOffset() > endDeclared.peek()) {
 						builder.append("}\n");
 						endDeclared.pop();
 					}
-					if (entity.getEntityType().is(Entity.INTERFACE, Entity.ENUM, Entity.ANNOTATION)) {
+					
+					if(entity.getEntityType().is(Entity.FIELD)){
+						String modf = "";
+						for (Modifier mod : entity.getModifiers()) {
+							builder.append(mod).append(' ');
+							modf+=mod+" ";
+						}
+						FelipeDebug.debug("[Field]:"+modf+" "+entity);
+						//builder.append((Modifiers.toString(entity.getModifiers().getValue())));
+						//builder.append("Object ");//type
+						
+						String select = "select fqn from entities left join relations on (rhs_eid=entity_id) where relation_type='HOLDS' AND lhs_eid="+entity.getEntityID();
+						FelipeDebug.debug(select+";");
+						SlicerDatabaseAccessor dba = SlicerDatabaseAccessor.create();
+						String typeFqn=dba.manualQuery(select);
+						if(typeFqn==null || typeFqn==""){
+							typeFqn=".Object";
+						}
+						builder.append(typeFqn.substring(typeFqn.lastIndexOf(".")+1)+" ");//TYPE
+						
+						//name and value
+						int len = entity.getLength();
+						if(entity.getEntityType().is(Entity.FIELD) 
+								//&& entity.getModifiers()!=null 
+								//&& (entity.getModifiers().getValue() & Modifier.FINAL.getValue() ) !=0 ){//it is a field and it is final...so it should be initialized
+								){
+							len+= getInitFieldLength(contents,entity.getOffset()+len);//new len based on source file
+							builder.append(contents, entity.getOffset(),len).append("\n");//name and value
+						}  else {
+							builder.append(entity.getFqn().substring(entity.getFqn().lastIndexOf(".")+1)+";\n");//name
+						}
+												
+					} else if (entity.getEntityType().isDeclaredType()) {
 						// Add the modifiers
 						for (Modifier mod : entity.getModifiers()) {
 							builder.append(mod).append(' ');
 						}
-
 						// Add the type name
 						builder.append(entity.getEntityType()).append(' ').append(fqn.substring(idx + 1));
 
-						ModeledTypeImpl type = typeModel.get(entity.getEntityID());
+						
+						ModeledTypeImpl type = typeModel.get(
+								entity.getEntityID());
 
 						if (entity.getEntityType() == Entity.CLASS) {
 							// Add the superclass
 							ModeledTypeImpl superclassType = type.getSuperclass();
 							// Ignore it if it's java.lang.Object
 							if (superclassType.getSuperclass() != null && contains(superclassType.getEntityID())) {
-								builder.append(" extends ").append(get(superclassType.getEntityID()).getFqn())
-										.append(' ');
+								builder.append(" extends ").append(get(superclassType.getEntityID()).getFqn()).append(' ');
 							}
 
 							// Add the superinterfaces
@@ -229,7 +274,12 @@ public class SliceImpl implements Slice {
 						endDeclared.push(entity.getOffset() + entity.getLength());
 					} else {
 						// Add this entity
-						builder.append(contents, entity.getOffset(), entity.getLength()).append("\n");
+						builder.append(
+								contents, 
+								entity.getOffset(),
+								entity.getLength())
+								.append("\n");
+
 					}
 				}
 
@@ -245,5 +295,46 @@ public class SliceImpl implements Slice {
 			logger.log(Level.SEVERE, "Error in writing slice to zip file");
 		}
 		return bos.toByteArray();
+	}
+
+
+	
+	
+	/**get the length that it takes to add a fields value, for example: str = new String("abc"); is 21 chars long, " = new String("abc");"*/
+	private static int getInitFieldLength(char[] contents, int start) {		
+		char[] open = {'{','[','('};
+		char[] close = {'}',']',')'};		
+		char finish = ';';
+		LinkedList<Integer> openned = new LinkedList<Integer>();
+		int count = 0;
+		boolean end = false;
+		while(!end && contents.length>(start+count)){
+			char c = contents[start+count];
+			if(c==finish && openned.size()==0 ){
+				end=true;
+				return count+1;
+			}
+			int openidx = -1;
+			for(int i=0;i<open.length;++i){
+				if(c==open[i]){
+					openidx=i;
+					break;
+				}
+			}
+			int closeidx = -1;
+			for(int i=0;i<close.length;++i){
+				if(c==close[i]){
+					closeidx=i;
+					break;
+				}
+			}
+			if(openidx>=0){
+				openned.addFirst(openidx);
+			} else if(openned.size()>0 && closeidx==openned.getFirst()){
+				openned.removeFirst();
+			}
+			count++;
+		}
+		return 0;
 	}
 }

@@ -20,6 +20,7 @@ package edu.uci.ics.sourcerer.services.slicer.internal;
 import java.io.Closeable;
 import java.util.Collection;
 
+
 import edu.uci.ics.sourcerer.tools.java.db.schema.EntitiesTable;
 import edu.uci.ics.sourcerer.tools.java.db.schema.ImportsTable;
 import edu.uci.ics.sourcerer.tools.java.db.schema.ProjectsTable;
@@ -170,5 +171,14 @@ class SlicerDatabaseAccessor implements Closeable {
   @Override
   public void close() {
     IOUtils.close(conn);
+  }
+  
+  public String manualQuery(String query){
+	  if(conn.open()){
+		  String firstRow =conn.getExecutor().executeSingle(query);
+		  conn.close();
+		  return firstRow;
+	  }
+	  return "";
   }
 }
