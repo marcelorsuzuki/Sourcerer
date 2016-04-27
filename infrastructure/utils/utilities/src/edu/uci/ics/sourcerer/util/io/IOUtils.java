@@ -38,6 +38,7 @@ import java.util.logging.Level;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+
 import edu.uci.ics.sourcerer.util.io.arguments.Argument;
 import edu.uci.ics.sourcerer.util.io.arguments.DualFileArgument;
 import edu.uci.ics.sourcerer.util.io.internal.IOUtilFactory;
@@ -186,7 +187,8 @@ public final class IOUtils {
   
   public static byte[] wget(String url) {
     try {
-      return getInputStreamAsByteArray(new URL(url).openStream(), 32);
+        return getInputStreamAsByteArray(new URL(url).openStream(), 32);
+    	
     } catch (IOException e) {
       logger.log(Level.SEVERE, "Error opening url: " + url, e);
       return null;

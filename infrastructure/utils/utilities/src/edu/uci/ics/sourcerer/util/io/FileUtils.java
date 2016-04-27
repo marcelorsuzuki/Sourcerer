@@ -295,6 +295,9 @@ public class FileUtils {
     if (file == null) {
       return null;
     }
+    if(file.getAbsolutePath().contains(File.separator+File.separator)){
+    	file = new File(file.getAbsolutePath().replace(File.separatorChar+File.separator, File.separator));
+    }
     InputStream is = null;
     try {
       long length = file.length();
